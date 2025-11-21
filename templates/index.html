@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云财务客服小助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans SC', sans-serif; }
+        .prose p { margin-bottom: 0.5em; }
+        .prose ul { list-style-type: disc; padding-left: 1.2em; }
+        /* 隐藏滚动条但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 加载动画 */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-100 h-screen flex flex-col overflow-hidden">
+
+    <div id="api-key-modal" class="fixed inset-0 bg-gray-900 bg-opacity-90 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all scale-100">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                    <i class="fas fa-key"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">身份验证</h2>
+                <p class="text-gray-500 text-sm mt-2">请输入您的阿里云百炼 (DashScope) API Key 以继续访问云财务助手。</p>
+            </div>
+            <div class="space-y-4">
+                <input type="password" id="api-key-input"
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    placeholder="sk-..." autocomplete="off">
+                <button onclick="saveApiKey()"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors shadow-lg hover:shadow-blue-500/30">
+                    进入系统
+                </button>
+            </div>
+            <p class="text-xs text-red-400 mt-4 text-center hidden" id="api-key-error">请输入有效的 API Key</p>
+        </div>
+    </div>
+
+    <div class="flex-1 flex max-w-7xl mx-auto w-full h-full shadow-2xl bg-white rounded-none md:rounded-xl md:my-4 overflow-hidden">
+
+        <aside class="w-80 bg-slate-50 border-r border-gray-200 flex flex-col hidden md:flex">
+            <div class="p-6 border-b border-gray-200 bg-white">
+                <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-robot text-blue-600"></i> 云财务小助手
+                </h1>
+                <p class="text-xs text-gray-500 mt-1">专业 • 严谨 • 智能</p>
+            </div>
+
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="mb-6">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">📚 知识库管理</h3>
+                    <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-blue-50 transition-colors cursor-pointer relative" id="drop-zone">
+                        <input type="file" id="file-upload" multiple accept=".pdf,.docx,.md" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                        <p class="text-sm text-gray-600">点击或拖拽文件上传</p>
+                        <p class="text-xs text-gray-400 mt-1">支持 PDF, Word, Markdown</p>
+                    </div>
+                    <div id="file-list" class="mt-4 space-y-2 text-sm"></div>
+                    <button onclick="uploadFiles()" id="upload-btn" class="w-full mt-3 bg-gray-800 hover:bg-gray-900 text-white py-2 rounded-lg text-sm transition-colors hidden">
+                        <i class="fas fa-sync-alt mr-1"></i> 开始学习更新
+                    </button>
+                </div>
+
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 class="text-blue-800 text-sm font-bold mb-1"><i class="fas fa-info-circle"></i> 提示</h4>
+                    <p class="text-xs text-blue-600 leading-relaxed">
+                        如果知识库中没有答案，系统将自动尝试联网搜索相关财务政策和软件操作指南。
+                    </p>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-200 text-center">
+                <button onclick="clearKey()" class="text-xs text-gray-400 hover:text-red-500 underline">清除 API Key 并退出</button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col bg-white relative">
+            <div class="md:hidden p-4 border-b border-gray-200 flex justify-between items-center bg-white z-10">
+                <span class="font-bold text-gray-800">云财务小助手</span>
+                <button class="text-gray-500"><i class="fas fa-bars"></i></button>
+            </div>
+
+            <div id="chat-box" class="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white shadow-md">
+                        <i class="fas fa-headset"></i>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-200 max-w-[85%] text-gray-700 text-sm leading-relaxed">
+                        您好！我是您的专属云财务客服小助手。您可以上传财务文档让我学习，或者直接问我关于财务软件操作、税务政策等问题。<br>
+                        <span class="text-xs text-gray-400 mt-2 block">如果我不知道，我会尝试帮您去网上找找看。</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 bg-white border-t border-gray-100">
+                <div class="relative flex items-center shadow-sm rounded-full border border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all bg-white">
+                    <input
+                        type="text"
+                        id="user-input"
+                        class="w-full pl-6 pr-14 py-3.5 bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                        placeholder="请输入您的财务问题..."
+                        autocomplete="off"
+                    >
+                    <button
+                        onclick="sendMessage()"
+                        id="send-btn"
+                        class="absolute right-2 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <i class="fas fa-paper-plane w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- API Key Logic ---
+        const modal = document.getElementById('api-key-modal');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const errorMsg = document.getElementById('api-key-error');
+
+        // 检查本地存储
+        let apiKey = localStorage.getItem('dashscope_api_key');
+        if (apiKey) {
+            modal.classList.add('hidden');
+        }
+
+        function saveApiKey() {
+            const key = apiKeyInput.value.trim();
+            if (!key.startsWith('sk-') || key.length < 10) {
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            apiKey = key;
+            localStorage.setItem('dashscope_api_key', apiKey);
+            modal.classList.add('hidden');
+        }
+
+        function clearKey() {
+            localStorage.removeItem('dashscope_api_key');
+            location.reload();
+        }
+
+        // --- File Upload Logic ---
+        const fileInput = document.getElementById('file-upload');
+        const fileList = document.getElementById('file-list');
+        const uploadBtn = document.getElementById('upload-btn');
+        let selectedFiles = [];
+
+        fileInput.addEventListener('change', function(e) {
+            selectedFiles = Array.from(e.target.files);
+            renderFileList();
+        });
+
+        function renderFileList() {
+            fileList.innerHTML = '';
+            if (selectedFiles.length > 0) {
+                uploadBtn.classList.remove('hidden');
+                selectedFiles.forEach(file => {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center justify-between bg-gray-100 px-3 py-2 rounded';
+                    div.innerHTML = `
+                        <span class="truncate w-40">${file.name}</span>
+                        <span class="text-xs text-gray-500">${(file.size/1024).toFixed(0)}KB</span>
+                    `;
+                    fileList.appendChild(div);
+                });
+            } else {
+                uploadBtn.classList.add('hidden');
+            }
+        }
+
+        async function uploadFiles() {
+            if (!apiKey) return alert("请先登录 API Key");
+
+            uploadBtn.innerHTML = '<div class="loader mx-auto border-white border-t-transparent"></div> 正在学习...';
+            uploadBtn.disabled = true;
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => formData.append('files', file));
+
+            try {
+                const res = await fetch('/upload', {
+                    method: 'POST',
+                    headers: { 'X-API-Key': apiKey },
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message);
+                    fileList.innerHTML = '<div class="text-green-600 text-center"><i class="fas fa-check-circle"></i> 学习完成</div>';
+                    selectedFiles = [];
+                } else {
+                    alert('上传失败: ' + data.detail);
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                uploadBtn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i> 开始学习更新';
+                uploadBtn.disabled = false;
+            }
+        }
+
+        // --- Chat Logic ---
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+
+        userInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMessage(); });
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+            if (!apiKey) {
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            appendMessage('user', text);
+            userInput.value = '';
+
+            const loadingId = showLoading();
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({ question: text })
+                });
+
+                const data = await res.json();
+                removeLoading(loadingId);
+
+                if (res.ok) {
+                    let content = marked.parse(data.answer);
+                    // 添加来源标识
+                    if (data.source === 'web_search') {
+                        content += '<div class="mt-2 pt-2 border-t border-gray-100 text-xs text-orange-500 flex items-center gap-1"><i class="fas fa-globe"></i> 数据来源：互联网实时搜索聚合</div>';
+                    } else if (data.source === 'knowledge_base') {
+                        content += '<div class="mt-2 pt-2 border-t border-gray-100 text-xs text-green-600 flex items-center gap-1"><i class="fas fa-database"></i> 数据来源：内部知识库</div>';
+                    }
+                    appendMessage('ai', content, true);
+                } else {
+                    appendMessage('ai', '❌ 系统错误: ' + data.detail);
+                }
+            } catch (e) {
+                removeLoading(loadingId);
+                appendMessage('ai', '❌ 网络连接失败');
+            }
+        }
+
+        function appendMessage(role, text, isHtml = false) {
+            const isUser = role === 'user';
+            const div = document.createElement('div');
+            div.className = `flex gap-4 ${isUser ? 'flex-row-reverse' : ''}`;
+
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded-full ${isUser ? 'bg-gray-800' : 'bg-blue-600'} flex-shrink-0 flex items-center justify-center text-white shadow-md">
+                    <i class="fas ${isUser ? 'fa-user' : 'fa-headset'}"></i>
+                </div>
+                <div class="p-4 rounded-2xl ${isUser ? 'bg-gray-800 text-white rounded-tr-none' : 'bg-white text-gray-700 rounded-tl-none border border-gray-200'} shadow-sm max-w-[85%] text-sm leading-relaxed prose">
+                    ${isHtml ? text : text.replace(/\n/g, '<br>')}
+                </div>
+            `;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showLoading() {
+            const id = Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'flex gap-4';
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white">
+                    <i class="fas fa-headset"></i>
+                </div>
+                <div class="bg-white p-4 rounded-2xl rounded-tl-none border border-gray-200 shadow-sm">
+                    <div class="loader border-blue-600 border-t-transparent w-5 h-5"></div>
+                </div>
+            `;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return id;
+        }
+
+        function removeLoading(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+    </script>
+</body>
+</html>
